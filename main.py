@@ -3,22 +3,25 @@ from numbers_parser.document import Table,Sheet,Document
 from pendulum.datetime import DateTime
 from typing import Iterable
 from settings import FILENAME
+from typing import Callable
 
 def main()->None:
     ''' Updates my Numbers BudgetTracker with the weekly total cost of my expenses starting on Monday'''
 
     numbers_doc = np.Document(FILENAME)
-    budget_tracker_sheet = create_get_sheet(numbers_doc, "DailyTracker")
-    daily_tracker_table = create_get_table(budget_tracker_sheet, "DailyTracker")
+    budget_tracker_sheet = get_sheet(numbers_doc, "DailyTracker")
+    daily_tracker_table = get_table(budget_tracker_sheet, "DailyTracker")
 
     dates = get_column_data("Date", daily_tracker_table)
     costs = get_column_data("Cost", daily_tracker_table)
-    mondays = remove_duplicates([date for date in dates if is_monday(date)])
+    mondays:list[DateTime] = remove_duplicates([date for date in dates if is_monday(date)])
+
     weekly_costs = [("StartOfWeek (Monday)", "WeeklyCost")]
     weekly_costs.extend([(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays])
-    weekly_tracker_sheet = create_get_sheet(numbers_doc, "WeeklyTracker", "WeeklyTracker")
-    weekly_tracker_table = create_get_table(weekly_tracker_sheet, "WeeklyTracker", num_rows=1, num_cols=2)
-    monthly_costs = calculate_monthly_cost(dates, costs)
+
+    if weekly_tracker_sheet:=get_sheet(numbers_doc, "WeeklyTracker"): weekly_tracker_table = get_table(weekly_tracker_sheet, "WeeklyTracker")
+    else: weekly_tracker_table = create_sheet(numbers_doc, "WeeklyTracker", return_table = True)("WeeklyTracker",len(weekly_costs),len(weekly_costs))
+    
     append_data(weekly_tracker_table, weekly_costs)
     numbers_doc.save(FILENAME)
     
@@ -61,7 +64,7 @@ def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[
     DAYS_IN_WEEK = 7
     week = [start_date.add(days = n) for n in range(DAYS_IN_WEEK)]
 
-    weekly_cost = sum([cost for date,cost in zip(dates, costs) if date in week])
+    weekly_cost = sum([cost for date, cost in zip(dates, costs) if date in week])
 
     return weekly_cost         
 
@@ -86,20 +89,30 @@ def get_column_data(column_name:str, table:Table)->list:
 
     return [val for val in list(table.iter_cols(min_col = start, max_col = end, values_only=True))[0] if val != None and val != column_name]
 
-def create_get_sheet(document:Document, sheetname:str, tablename = None)-> Sheet:
-    '''Creates and returns a sheet with the specified sheetname if does not exists, if it does exist it returns it only'''
-   
+def create_sheet(document:Document, sheetname:str, return_table:bool = False)-> Sheet|Callable[[str,int,int], Sheet]:
+    '''Creates and returns a sheet with the specified sheetname or a callable if return_table is set to True'''
+    if not return_table: return document.add_sheet(sheetname)
+    return lambda tablename, num_rows, num_cols: get_table(document.add_sheet(sheetname, tablename, num_rows=num_rows, num_cols=num_cols), tablename)
+
+def get_sheet(document:Document, sheetname:str)->Sheet|None:
+    '''Gets the sheet with the specified sheet name'''
     for sheet in document.sheets:
         if sheet.name == sheetname: return sheet
+    print(f"{sheetname} is not in the Numbers document")
+    return None
 
-    return document.add_sheet(sheetname, tablename) if tablename else document.add_sheet(sheetname)
-
-def create_get_table(sheet:Sheet, tablename:str, num_rows = 0, num_cols = 0)->Table:
-    '''Creates and returns a sheet with the specified sheetname if does not exists, if it does exist it returns it only'''
-    for table in sheet.tables:
-        if table.name == tablename: return table
+def create_table(sheet:Sheet, tablename:str, num_rows = 0, num_cols = 0)->Table:
+    '''Creates and returns a sheet with the specified sheetname if does not exist'''
 
     return sheet.add_table(tablename, num_cols=num_cols, num_rows=num_rows) if num_rows and num_cols else sheet.add_table(tablename)
+
+def get_table(sheet:Sheet, tablename:str)->Table|None:
+    '''Returns the table from the sheets with the specified name or returns None'''
+    for table in sheet.tables:
+        if table.name == tablename: return table
+    
+    print("Table not found in sheet")
+    return None
 
 def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->dict[str,float|int]:
     '''Returns a dictionary with the months being the keys and the monthly cost being the values'''
