@@ -18,6 +18,7 @@ def main()->None:
     weekly_costs.extend([(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays])
     weekly_tracker_sheet = create_get_sheet(numbers_doc, "WeeklyTracker", "WeeklyTracker")
     weekly_tracker_table = create_get_table(weekly_tracker_sheet, "WeeklyTracker", num_rows=1, num_cols=2)
+    monthly_costs = calculate_monthly_cost(dates, costs)
     append_data(weekly_tracker_table, weekly_costs)
     numbers_doc.save(FILENAME)
     
@@ -53,7 +54,7 @@ def remove_duplicates(dates:list)->list:
         
     return unique
 
-def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[float])->float:
+def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[float|int])->float|int:
     '''Will calculate the sum of the values passed in from the date entered up until 7 days after not including the 7th day'''
 
     if(not isinstance(start_date, DateTime)): raise TypeError("the start_date is not a DateTime object")
@@ -99,6 +100,41 @@ def create_get_table(sheet:Sheet, tablename:str, num_rows = 0, num_cols = 0)->Ta
         if table.name == tablename: return table
 
     return sheet.add_table(tablename, num_cols=num_cols, num_rows=num_rows) if num_rows and num_cols else sheet.add_table(tablename)
+
+def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->dict[str,float|int]:
+    '''Returns a dictionary with the months being the keys and the monthly cost being the values'''
+    
+    months:dict[str,list[float|int]] = {}
+
+    for date, cost in zip(dates, costs):
+        month_name = to_month_name(date.month)
+        month_costs = months.get(month_name, False)
+        if month_costs:
+            month_costs.append(cost)
+        else:
+            months[month_name] = [cost]
+    
+    months = {month:sum(costs) for month, costs in months.items()}
+    
+    return months
+
+def to_month_name(month:int)->str:
+    months = {
+        1:"January",
+        2:"February",
+        3:"March",
+        4:"April",
+        5:"May",
+        6:"June",
+        7:"July",
+        8:"August",
+        9:"September",
+        10:"October",
+        11:"November",
+        12:"December",
+    }
+
+    return months.get(month, f"Error {month} does not exist")
 
 if __name__ == "__main__":
     main()
