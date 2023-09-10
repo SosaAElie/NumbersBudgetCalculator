@@ -25,7 +25,7 @@ def main()->None:
     else: weekly_tracker_table = create_sheet(numbers_doc, "WeeklyTracker", return_table = True)("WeeklyTracker",len(weekly_costs),len(weekly_costs[0]))
     
     if monthly_tracker_sheet:=get_sheet(numbers_doc, "MonthlyTracker"): monthly_tracker_table = get_table(monthly_tracker_sheet, "MonthlyTracker")
-    else: monthly_tracker_sheet = create_sheet(numbers_doc, "MonthlyTracker", return_table = True)("MonthlyTracker",len(monthly_costs),len(monthly_costs[0]))
+    else: monthly_tracker_table = create_sheet(numbers_doc, "MonthlyTracker", return_table = True)("MonthlyTracker",len(monthly_costs),len(monthly_costs[0]))
 
     append_data(weekly_tracker_table, weekly_costs)
     append_data(monthly_tracker_table, monthly_costs)
