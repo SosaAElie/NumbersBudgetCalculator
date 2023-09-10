@@ -14,18 +14,24 @@ def main()->None:
 
     dates = get_column_data("Date", daily_tracker_table)
     costs = get_column_data("Cost", daily_tracker_table)
-    mondays:list[DateTime] = remove_duplicates([date for date in dates if is_monday(date)])
+    mondays = remove_duplicates([date for date in dates if is_monday(date)])
 
     weekly_costs = [("StartOfWeek (Monday)", "WeeklyCost")]
+    monthly_costs = [("Month", "MonthlyCost")]
     weekly_costs.extend([(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays])
+    monthly_costs.extend(calculate_monthly_cost(dates, costs))
 
     if weekly_tracker_sheet:=get_sheet(numbers_doc, "WeeklyTracker"): weekly_tracker_table = get_table(weekly_tracker_sheet, "WeeklyTracker")
-    else: weekly_tracker_table = create_sheet(numbers_doc, "WeeklyTracker", return_table = True)("WeeklyTracker",len(weekly_costs),len(weekly_costs))
+    else: weekly_tracker_table = create_sheet(numbers_doc, "WeeklyTracker", return_table = True)("WeeklyTracker",len(weekly_costs),len(weekly_costs[0]))
     
+    if monthly_tracker_sheet:=get_sheet(numbers_doc, "MonthlyTracker"): monthly_tracker_table = get_table(monthly_tracker_sheet, "MonthlyTracker")
+    else: monthly_tracker_sheet = create_sheet(numbers_doc, "MonthlyTracker", return_table = True)("MonthlyTracker",len(monthly_costs),len(monthly_costs[0]))
+
     append_data(weekly_tracker_table, weekly_costs)
+    append_data(monthly_tracker_table, monthly_costs)
     numbers_doc.save(FILENAME)
     
-def append_data(table:Table, data:Iterable[Iterable])->None:
+def append_data(table:Table, data:list[tuple])->None:
     '''Adds the data from an iterable to the table'''
     columns = len(data)
     rows = len(data[0])
@@ -114,7 +120,7 @@ def get_table(sheet:Sheet, tablename:str)->Table|None:
     print("Table not found in sheet")
     return None
 
-def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->dict[str,float|int]:
+def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->list[tuple]:
     '''Returns a dictionary with the months being the keys and the monthly cost being the values'''
     
     months:dict[str,list[float|int]] = {}
@@ -127,7 +133,7 @@ def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->dict[st
         else:
             months[month_name] = [cost]
     
-    months = {month:sum(costs) for month, costs in months.items()}
+    months = [(month,sum(costs)) for month, costs in months.items()]
     
     return months
 
