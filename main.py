@@ -33,8 +33,8 @@ def main()->None:
     
 def append_data(table:Table, data:list[tuple])->None:
     '''Adds the data from an iterable to the table'''
-    columns = len(data)
-    rows = len(data[0])
+    columns = len(data[0])
+    rows = len(data)
     flattened = flatten_list(data)
     coordinates = [(x,y) for x in range(rows) for y in range(columns)]
 
