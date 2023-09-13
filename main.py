@@ -14,11 +14,9 @@ def main()->None:
 
     dates = get_column_data("Date", daily_tracker_table)
     costs = get_column_data("Cost", daily_tracker_table)
-    mondays = remove_duplicates([date for date in dates if is_monday(date)])
-
     weekly_costs = [("StartOfWeek (Monday)", "WeeklyCost")]
     monthly_costs = [("Month", "MonthlyCost")]
-    weekly_costs.extend([(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays])
+    weekly_costs.extend(calculate_weekly_costs(dates, costs))
     monthly_costs.extend(calculate_monthly_cost(dates, costs))
 
     if weekly_tracker_sheet:=get_sheet(numbers_doc, "WeeklyTracker"): weekly_tracker_table = get_table(weekly_tracker_sheet, "WeeklyTracker")
@@ -54,14 +52,36 @@ def flatten_list(stacked_list:Iterable[Iterable])->list:
 
     return flattened
 
-def remove_duplicates(dates:list)->list:
+def remove_duplicates(duplicates:list)->list:
     '''Removes the duplicate dates in a list containing DateTime objects'''
     
     unique = []
-    for date in dates: 
-        if date not in unique: unique.append(date)
+    for item in duplicates: 
+        if item not in unique: unique.append(item)
         
     return unique
+
+def calculate_mondays(start:DateTime, end:DateTime)->list[DateTime]:
+    '''Calculates the number of Mondays between the start date and the end date'''
+    mondays = []
+
+    while not is_monday(start):start = start.subtract(days = 1)
+
+    while start < end:
+        mondays.append(start)
+        start = start.add(days = 7)
+
+    return mondays
+
+def calculate_weekly_costs(dates:list[DateTime], costs:list[float|int])->list[tuple[DateTime,float|int]]:
+    '''Determines the number of Mondays that should be present between the earliest date and the latest date 
+    and calculates the sum from one Monday until the next not including the 7th day, i.e the next Monday'''
+    earliest_date = dates[len(dates)-1]
+    latest_date = dates[0]
+    
+    mondays = calculate_mondays(earliest_date, latest_date)
+    
+    return [(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays]
 
 def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[float|int])->float|int:
     '''Will calculate the sum of the values passed in from the date entered up until 7 days after not including the 7th day'''
@@ -70,7 +90,7 @@ def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[
     DAYS_IN_WEEK = 7
     week = [start_date.add(days = n) for n in range(DAYS_IN_WEEK)]
 
-    weekly_cost = sum([cost for date, cost in zip(dates, costs) if date in week])
+    weekly_cost = round(sum([cost for date, cost in zip(dates, costs) if date in week]), ndigits=2)
 
     return weekly_cost         
 
