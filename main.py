@@ -81,7 +81,7 @@ def calculate_weekly_costs(dates:list[DateTime], costs:list[float|int])->list[tu
     
     mondays = calculate_mondays(earliest_date, latest_date)
     
-    return [(monday,calculate_weekly_cost(monday, dates, costs)) for monday in mondays]
+    return [(monday,round(calculate_weekly_cost(monday, dates, costs), ndigits = 2)) for monday in mondays]
 
 def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[float|int])->float|int:
     '''Will calculate the sum of the values passed in from the date entered up until 7 days after not including the 7th day'''
@@ -153,7 +153,7 @@ def calculate_monthly_cost(dates:list[DateTime], costs:list[float|int])->list[tu
         else:
             months[month_name] = [cost]
     
-    months = [(month,sum(costs)) for month, costs in months.items()]
+    months = [(month,round(sum(costs), ndigits = 2)) for month, costs in months.items()]
     
     return months
 
