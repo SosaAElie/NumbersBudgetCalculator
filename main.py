@@ -1,5 +1,5 @@
 import numbers_parser as np
-from numbers_parser.document import Table,Sheet,Document
+from numbers_parser.document import Table,Sheet,Document, Cell
 from pendulum.datetime import DateTime
 from typing import Iterable
 from settings import FILENAME
@@ -12,6 +12,7 @@ def main()->None:
     budget_tracker_sheet = get_sheet(numbers_doc, "DailyTracker")
     daily_tracker_table = get_table(budget_tracker_sheet, "DailyTracker")
 
+    details = get_column_data("Details", daily_tracker_table)
     dates = get_column_data("Date", daily_tracker_table)
     costs = get_column_data("Cost", daily_tracker_table)
     weekly_costs = [("StartOfWeek (Monday)", "WeeklyCost")]
@@ -19,15 +20,76 @@ def main()->None:
     weekly_costs.extend(calculate_weekly_costs(dates, costs))
     monthly_costs.extend(calculate_monthly_cost(dates, costs))
 
+
     if weekly_tracker_sheet:=get_sheet(numbers_doc, "WeeklyTracker"): weekly_tracker_table = get_table(weekly_tracker_sheet, "WeeklyTracker")
     else: weekly_tracker_table = create_sheet(numbers_doc, "WeeklyTracker", return_table = True)("WeeklyTracker",len(weekly_costs),len(weekly_costs[0]))
     
     if monthly_tracker_sheet:=get_sheet(numbers_doc, "MonthlyTracker"): monthly_tracker_table = get_table(monthly_tracker_sheet, "MonthlyTracker")
     else: monthly_tracker_table = create_sheet(numbers_doc, "MonthlyTracker", return_table = True)("MonthlyTracker",len(monthly_costs),len(monthly_costs[0]))
-
+    
+    
     append_data(weekly_tracker_table, weekly_costs)
     append_data(monthly_tracker_table, monthly_costs)
+
+    if not header_exists(weekly_tracker_table, "Date"): add_col(weekly_tracker_table, ["Date"])
+    if not header_exists(weekly_tracker_table, "Highest Cost Item"): add_col(weekly_tracker_table, ["Highest Cost Item"])
+    if not header_exists(weekly_tracker_table, "Cost"): add_col(weekly_tracker_table, ["Cost"])
+
+    expensive_items = most_expensive_weekly_items(dates, costs, details)
+    expensive_items.insert(0, ("Date", "Highest Cost Item", "Cost"))
+    add_tupled_values(weekly_tracker_table, expensive_items)
+ 
     numbers_doc.save(FILENAME)
+
+def add_tupled_values(table:Table, values:list[tuple])->None:
+    '''Adds a list of tuples to a table as new columns, uses the first tuple of values in a list as the headers in the table'''
+    col_indices = []
+    for index, tup in enumerate(values):
+        if index == 0:
+            for val in tup:
+                if header_exists(table, val):
+                    col_indices.append(get_cell(table, val, coordinates_only = True)[1])
+        else:
+            for col_index, value in zip(col_indices, tup):
+                table.write(index, col_index, value)
+    return None
+
+
+def header_exists(table:Table, header:str)->bool:
+    '''Returns whether the header exists in the table'''
+    return True if header in [table.cell(0,y).value for y in range(table.num_cols)] else False
+
+def get_cell(table:Table, value, coordinates_only:bool = False)->Cell|tuple[int, int]:
+    '''Returns the cell for the first instance of a given value'''
+    for x in range(table.num_rows):
+        for y in range(table.num_cols):
+            if table.cell(x,y).value == value and coordinates_only:          
+                return (x,y)
+            elif table.cell(x,y).value == value and not coordinates_only:
+                return table.cell(x,y)
+
+def add_to_col(table:Table, header:str, values:list, overwrite:bool = False)->None:
+    '''Adds data to the header specified, appends to the bottom of the last row of the column by default, overwrite will overwrite any pre-existing values'''
+    if not header_exists(table, header): raise AttributeError("Header not found in table")
+
+    for y in range(table.num_cols): 
+        if table.cell(0,y).value == header: 
+            col_index = y
+
+    if overwrite:
+        for x, value in zip(range(1, len(values)+1), values):
+            table.write(x, col_index, value)
+    else:
+        for x, value in zip(range(table.num_rows, len(values)+table.num_rows)):
+            table.write(x, col_index, value)
+    return None
+
+def add_col(table:Table, values:list)->None:
+    '''Adds a list of values to a table by adding a new column to the end of the table'''
+    new_col = table.num_cols
+    coordinates = [(x, new_col) for x in range(len(values))]
+    for coordinate,value in zip(coordinates, values): table.write(*coordinate, value)
+    return None
     
 def append_data(table:Table, data:list[tuple])->None:
     '''Adds the data from an iterable to the table'''
@@ -71,6 +133,7 @@ def calculate_mondays(start:DateTime, end:DateTime)->list[DateTime]:
         mondays.append(start)
         start = start.add(days = 7)
 
+    mondays.reverse()
     return mondays
 
 def calculate_weekly_costs(dates:list[DateTime], costs:list[float|int])->list[tuple[DateTime,float|int]]:
@@ -80,9 +143,7 @@ def calculate_weekly_costs(dates:list[DateTime], costs:list[float|int])->list[tu
     latest_date = dates[0]
     
     mondays = calculate_mondays(earliest_date, latest_date)
-    data = [(monday,round(calculate_weekly_cost(monday, dates, costs), ndigits = 2)) for monday in mondays]
-    data.reverse()
-    return data
+    return [(monday,round(calculate_weekly_cost(monday, dates, costs), ndigits = 2)) for monday in mondays]
 
 def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[float|int])->float|int:
     '''Will calculate the sum of the values passed in from the date entered up until 7 days after not including the 7th day'''
@@ -94,6 +155,24 @@ def calculate_weekly_cost(start_date:DateTime, dates:list[DateTime], costs:list[
     weekly_cost = round(sum([cost for date, cost in zip(dates, costs) if date in week]), ndigits=2)
 
     return weekly_cost         
+
+def most_expensive_weekly_item(start_date:DateTime, dates:list[DateTime], costs:list[float|int], details:list[str])->tuple[DateTime,str,float|int]:
+    '''Iterates through the dates, costs and details lists beginning from the start date to find the most expensive item from that week'''
+    DAYS_IN_WEEK = 7
+    week = [start_date.add(days = n) for n in range(DAYS_IN_WEEK)]
+    weekly_costs = [cost for date, cost in zip(dates, costs) if date in week]
+    weekly_details = [detail for date, detail in zip(dates, details) if date in week]
+    highest_cost = max(weekly_costs)
+    return (dates[weekly_costs.index(highest_cost)], weekly_details[weekly_costs.index(highest_cost)], highest_cost)
+
+def most_expensive_weekly_items(dates:list[DateTime], costs:list[float|int], details:list[str])->list[tuple[DateTime, str, float|int]]:
+    '''Determines the number of Mondays that should be present between the earliest date and the latest date 
+    and finds the most expensive item from one Monday until the next not including the 7th day, i.e the next Monday'''
+    earliest_date = dates[len(dates)-1]
+    latest_date = dates[0]
+    mondays = calculate_mondays(earliest_date, latest_date)
+    return [most_expensive_weekly_item(monday, dates, costs, details,) for monday in mondays]
+
 
 def is_monday(date:DateTime)->bool:
     '''Checks if the date is a Monday'''
