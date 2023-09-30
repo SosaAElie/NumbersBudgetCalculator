@@ -163,7 +163,9 @@ def most_expensive_weekly_item(start_date:DateTime, dates:list[DateTime], costs:
     weekly_costs = [cost for date, cost in zip(dates, costs) if date in week]
     weekly_details = [detail for date, detail in zip(dates, details) if date in week]
     highest_cost = max(weekly_costs)
-    return (dates[weekly_costs.index(highest_cost)], weekly_details[weekly_costs.index(highest_cost)], highest_cost)
+    offset = costs.index(weekly_costs[0])
+    corresponding_index = weekly_costs.index(highest_cost)
+    return (dates[corresponding_index+offset], weekly_details[corresponding_index], highest_cost)
 
 def most_expensive_weekly_items(dates:list[DateTime], costs:list[float|int], details:list[str])->list[tuple[DateTime, str, float|int]]:
     '''Determines the number of Mondays that should be present between the earliest date and the latest date 
